@@ -1,0 +1,52 @@
+name: stash_app
+description: Student Survival Finance App (STASH)
+
+publish_to: 'none'
+
+version: 1.0.0+18
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.6
+
+  # 🔥 Firebase Core
+  firebase_core: ^2.30.0
+
+  # 🔐 Authentication
+  firebase_auth: ^4.19.0
+
+  # 🗄️ Firestore Database
+  cloud_firestore: ^4.17.0
+
+  # 🔔 Push notifications (Firebase Cloud Messaging)
+  firebase_messaging: ^14.7.10
+
+  # 🔒 App lock: biometric + PIN
+  local_auth: ^2.1.8
+  crypto: ^3.0.3
+
+  # 💳 Paystack wallet funding (client-side checkout)
+  webview_flutter: ^4.4.2
+
+  # 🌐 HTTP — Paystack account-name resolution on transfers
+  http: ^1.2.0
+
+  # 🧾 Receipt export — pure-Dart PDF generation. (Removed `printing`: its
+  # AndroidX resources need API 31+ / android:attr/lStar, which broke the
+  # cloud release build at :printing:verifyReleaseResources. Download is now
+  # handled per-platform in lib/utils/pdf_download*.dart.)
+  pdf: ^3.10.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

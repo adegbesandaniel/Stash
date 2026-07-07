@@ -1,0 +1,133 @@
+# Builds STASH for Android (+ web) and uploads each artifact to uppy.sh.
+#
+# Release builds are signed with the real keystore, supplied via repo secrets:
+#   KEYSTORE_BASE64  - base64 of android/app/stash-release.jks
+#   STORE_PASSWORD   - keystore password
+#   KEY_PASSWORD     - key password
+#   KEY_ALIAS        - key alias (e.g. stash)
+# If the secrets are absent, CI falls back to debug signing automatically.
+#
+# uppy.sh is a plain HTTP PUT endpoint: `curl --upload-file FILE https://uppy.sh/FILE`
+# prints a shareable download URL (files auto-expire after 7 days).
+name: Build Android & upload to uppy.sh
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Build Android (web + APK + AAB) -> uppy.sh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Pinned to match the project's Android toolchain (AGP 8.1.1, Gradle 8.3).
+          flutter-version: 3.24.5
+          channel: stable
+          cache: true
+
+      - name: Show versions
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Prepare output folder
+        run: mkdir -p dist
+
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::warning::No KEYSTORE_BASE64 secret set - release will use debug signing."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/stash-release.jks
+          {
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyPassword=$KEY_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "storeFile=stash-release.jks"
+          } > android/key.properties
+          echo "Release signing configured."
+
+      # ---------------------------------------------------------------- WEB
+      - name: Build web (release)
+        continue-on-error: true
+        run: |
+          flutter build web --release
+          (cd build/web && zip -rq "$GITHUB_WORKSPACE/dist/stash-web.zip" .)
+
+      # ------------------------------------------------------------- ANDROID
+      # armeabi-v7a only: a 32-bit APK installs AND runs on both 32-bit and
+      # 64-bit phones, which maximizes install compatibility.
+      - name: Build APK (release)
+        continue-on-error: true
+        run: |
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk dist/stash.apk
+
+      - name: Build App Bundle (.aab)
+        continue-on-error: true
+        run: |
+          flutter build appbundle --release
+          cp build/app/outputs/bundle/release/app-release.aab dist/stash.aab
+
+      # -------------------------------------------------- UPLOAD TO uppy.sh
+      - name: Upload all artifacts to uppy.sh
+        if: always()
+        run: |
+          set -uo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          {
+            echo "## STASH Android build"
+            echo ""
+            echo "Commit \`${SHORT_SHA}\` - links via uppy.sh, expire in 7 days."
+            echo ""
+            echo "**Install \`stash.apk\` on your phone.**"
+            echo ""
+            echo "| Artifact | Size | Link |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          shopt -s nullglob
+          files=(dist/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No artifacts were produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            name=$(basename "$f")
+            size=$(du -h "$f" | cut -f1)
+            echo "Uploading $name ($size) to uppy.sh ..."
+            url=$(curl -fsS -H "Max-Days: 7" --upload-file "$f" "https://uppy.sh/${SHORT_SHA}-${name}" | tr -d '\r\n')
+            if [ -n "$url" ]; then
+              echo "  -> $url"
+              echo "| $name | $size | [download]($url) |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| $name | $size | upload failed |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Attach artifacts to workflow run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stash-android
+          if-no-files-found: warn
+          path: dist/*

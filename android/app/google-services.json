@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "610915465334",
+    "project_id": "stash-3dd4e",
+    "storage_bucket": "stash-3dd4e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610915465334:android:0583f2a20f729bc7a84757",
+        "android_client_info": {
+          "package_name": "com.company.stash"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDy49JjTkalmP_TLMgtZv3s1FnKjIkG-jc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
